@@ -1,0 +1,36 @@
+{
+  "name": "line-calendar-sheet",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/server.js",
+  "type": "module",
+
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo \"No build step required\"",
+    "docker:build": "docker build -t line-exercise-bot .",
+    "docker:run": "docker run -d --name line-exercise-bot --env-file .env -p 3000:3000 --restart unless-stopped line-exercise-bot",
+    "docker:stop": "docker stop line-exercise-bot && docker rm line-exercise-bot",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop line-exercise-bot",
+    "pm2:restart": "pm2 restart line-exercise-bot",
+    "pm2:logs": "pm2 logs line-exercise-bot",
+    "railway:deploy": "railway up",
+    "railway:logs": "railway logs",
+    "railway:status": "railway status",
+    "railway:variables": "railway variables"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@line/bot-sdk": "^10.2.0",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "googleapis": "^159.0.0",
+    "node-cron": "^4.2.1",
+    "nodemon": "^3.1.10"
+  }
+}
