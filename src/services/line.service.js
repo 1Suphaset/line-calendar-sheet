@@ -10,6 +10,23 @@ export const replyMessage = async (replyToken, message) => {
   });
 };
 
+export const replyWithQuickReply = async (replyToken, message, quickReplyItems = []) => {
+  const quickReply = quickReplyItems.length
+    ? {
+        items: quickReplyItems.map((item) => ({
+          type: "action",
+          action: { type: "message", label: item.label, text: item.text },
+        })),
+      }
+    : undefined;
+
+  return client.replyMessage(replyToken, {
+    type: "text",
+    text: message,
+    quickReply,
+  });
+};
+
 export const sendFlexMessage = async (replyToken, flexMessage) => {
   return client.replyMessage(replyToken, flexMessage);
 };

@@ -1,4 +1,4 @@
-import { replyMessage, sendFlexMessage } from "../services/line.service.js";
+import { replyMessage, replyWithQuickReply, sendFlexMessage } from "../services/line.service.js";
 import { appendRow } from "../services/sheet.service.js";
 import { 
   createExerciseNotification, 
@@ -48,20 +48,21 @@ export const handleLineWebhook = async (req, res) => {
         else if (userMessage === "ช่วยเหลือ" || userMessage === "help") {
           await handleHelpCommand(replyToken);
         }
+        else if (userMessage === "เมนู" || userMessage === "menu") {
+          await handleMenuCommand(replyToken);
+        }
         else {
           // คำสั่งไม่รู้จัก
-          await replyMessage(replyToken, 
-            "🤖 สวัสดี! ฉันเป็นบอทช่วยออกกำลังกาย\n\n" +
-            "คำสั่งที่ใช้ได้:\n" +
-            "• 'ออกกำลังกาย' - ดูตารางออกกำลังกายวันนี้\n" +
-            "• 'ยืนยัน' - ยืนยันว่าออกกำลังกายแล้ว\n" +
-            "• 'ข้าม' - ข้ามการออกกำลังกายวันนี้\n" +
-            "• 'สรุป' - ดูสรุปการออกกำลังกายสัปดาห์นี้\n" +
-            "• 'สมัคร' - สมัครรับการแจ้งเตือน\n" +
-            "• 'ยกเลิก' - ยกเลิกการแจ้งเตือน\n" +
-            "• 'ทดสอบ' - ทดสอบการแจ้งเตือน\n" +
-            "• 'ช่วยเหลือ' - ดูคำสั่งทั้งหมด\n\n" +
-            "💪 พร้อมเริ่มออกกำลังกายแล้วหรือยัง?"
+          await replyWithQuickReply(
+            replyToken,
+            "🤖 สวัสดี! ฉันเป็นบอทช่วยออกกำลังกาย\n\nเลือกเมนูด้านล่างหรือพิมพ์คำสั่ง:",
+            [
+              { label: "ออกกำลังกาย", text: "ออกกำลังกาย" },
+              { label: "ยืนยัน", text: "ยืนยัน" },
+              { label: "ข้าม", text: "ข้าม" },
+              { label: "สรุป", text: "สรุป" },
+              { label: "เมนู", text: "เมนู" },
+            ]
           );
         }
       }
@@ -77,6 +78,8 @@ export const handleLineWebhook = async (req, res) => {
           await handleConfirmationCommand(replyToken, userId, false);
         } else if (data === "get_exercise") {
           await handleExerciseCommand(replyToken, userId);
+        } else if (data === "menu") {
+          await handleMenuCommand(replyToken);
         }
       }
     }
@@ -210,8 +213,97 @@ const handleHelpCommand = async (replyToken) => {
     "🧪 'ทดสอบ' - ทดสอบการแจ้งเตือน\n" +
     "❓ 'ช่วยเหลือ' - ดูคำสั่งทั้งหมด\n\n" +
     "💡 เคล็ดลับ: พิมพ์ 'ออกกำลังกาย' เพื่อเริ่มต้นวันนี้!";
-  
-  await replyMessage(replyToken, helpMessage);
+
+  await replyWithQuickReply(replyToken, helpMessage, [
+    { label: "ออกกำลังกาย", text: "ออกกำลังกาย" },
+    { label: "ยืนยัน", text: "ยืนยัน" },
+    { label: "ข้าม", text: "ข้าม" },
+    { label: "สรุป", text: "สรุป" },
+    { label: "เมนู", text: "เมนู" },
+  ]);
+};
+
+// จัดการคำสั่งเมนู (Flex + Postback)
+const handleMenuCommand = async (replyToken) => {
+  const menuFlex = {
+    type: "flex",
+    altText: "เมนูการใช้งาน",
+    contents: {
+      type: "carousel",
+      contents: [
+        {
+          type: "bubble",
+          hero: {
+            type: "image",
+            url: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=1200",
+            size: "full",
+            aspectRatio: "20:13",
+            aspectMode: "cover",
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              { type: "text", text: "เริ่มออกกำลังกาย", weight: "bold", size: "md" },
+              { type: "text", text: "ดูตารางของวันนี้", size: "sm", color: "#888888" },
+            ],
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                color: "#1DB446",
+                action: { type: "postback", label: "ดูตาราง", data: "get_exercise", displayText: "ออกกำลังกาย" },
+              },
+            ],
+          },
+        },
+        {
+          type: "bubble",
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              { type: "text", text: "ยืนยัน/ข้าม", weight: "bold", size: "md" },
+              { type: "text", text: "อัปเดตสถานะวันนี้", size: "sm", color: "#888888" },
+            ],
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              { type: "button", style: "primary", color: "#1DB446", action: { type: "postback", label: "ยืนยัน", data: "confirm_exercise", displayText: "ยืนยัน" } },
+              { type: "button", style: "secondary", action: { type: "postback", label: "ข้าม", data: "skip_exercise", displayText: "ข้าม" } },
+            ],
+          },
+        },
+        {
+          type: "bubble",
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              { type: "text", text: "อื่น ๆ", weight: "bold", size: "md" },
+              { type: "text", text: "สรุป/ช่วยเหลือ", size: "sm", color: "#888888" },
+            ],
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              { type: "button", style: "primary", action: { type: "message", label: "ดูสรุป", text: "สรุป" } },
+              { type: "button", style: "secondary", action: { type: "message", label: "ช่วยเหลือ", text: "ช่วยเหลือ" } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  await sendFlexMessage(replyToken, menuFlex);
 };
 
 // จัดการคำสั่งสมัครรับการแจ้งเตือน
