@@ -71,15 +71,19 @@ export const handleLineWebhook = async (req, res) => {
         const replyToken = event.replyToken;
         const userId = event.source.userId;
         const data = event.postback.data;
+        // รองรับ postback แบบ key=value&key2=value2
+        const params = Object.fromEntries(new URLSearchParams(data));
 
-        if (data === "confirm_exercise") {
+        if (data === "confirm_exercise" || params.action === "confirm_exercise") {
           await handleConfirmationCommand(replyToken, userId, true);
-        } else if (data === "skip_exercise") {
+        } else if (data === "skip_exercise" || params.action === "skip_exercise") {
           await handleConfirmationCommand(replyToken, userId, false);
-        } else if (data === "get_exercise") {
+        } else if (data === "get_exercise" || params.action === "get_exercise") {
           await handleExerciseCommand(replyToken, userId);
-        } else if (data === "menu") {
+        } else if (data === "menu" || params.action === "menu") {
           await handleMenuCommand(replyToken);
+        } else if (params.action === "toggle_exercise") {
+          await handleToggleExerciseCommand(replyToken, userId, params.idx);
         }
       }
     }
@@ -97,7 +101,19 @@ const handleExerciseCommand = async (replyToken, userId) => {
     const result = await createExerciseNotification(userId);
     
     if (result.success) {
-      // สร้าง Flex Message พร้อมปุ่มยืนยัน
+      // สร้าง Flex Message พร้อมปุ่มยืนยัน และเช็กลิสต์รายท่า
+      const checklistContents = Array.isArray(result.exerciseData.exercises)
+        ? result.exerciseData.exercises.map((ex, idx) => ({
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              { type: "text", text: `${idx + 1}. ${ex.name}`, size: "sm", wrap: true, flex: 6 },
+              { type: "button", style: "secondary", height: "sm", flex: 2, action: { type: "postback", label: "ทำแล้ว", data: `action=toggle_exercise&idx=${idx}`, displayText: `ทำแล้ว: ${ex.name}` } }
+            ],
+            margin: "sm"
+          }))
+        : [{ type: "text", text: result.message, wrap: true, size: "sm" }];
+
       const flexMessage = {
         type: "flex",
         altText: "ตารางการออกกำลังกายวันนี้",
@@ -120,12 +136,9 @@ const handleExerciseCommand = async (replyToken, userId) => {
             type: "box",
             layout: "vertical",
             contents: [
-              {
-                type: "text",
-                text: result.message,
-                wrap: true,
-                size: "sm"
-              }
+              { type: "text", text: result.exerciseData.focus ? `🎯 โฟกัส: ${result.exerciseData.focus}` : "", size: "sm", wrap: true, margin: "xs" },
+              { type: "text", text: "เช็กลิสต์รายท่า:", weight: "bold", margin: "md", size: "sm" },
+              ...checklistContents
             ]
           },
           footer: {
@@ -174,7 +187,11 @@ const handleConfirmationCommand = async (replyToken, userId, confirmed) => {
     const result = await handleExerciseConfirmation(userId, confirmed);
     
     if (result.success) {
-      await replyMessage(replyToken, result.message);
+      if (result.flex) {
+        await sendFlexMessage(replyToken, { type: 'flex', altText: 'สรุปสัปดาห์', contents: result.flex.contents });
+      } else {
+        await replyMessage(replyToken, result.message);
+      }
     } else {
       await replyMessage(replyToken, result.message);
     }
@@ -187,7 +204,7 @@ const handleConfirmationCommand = async (replyToken, userId, confirmed) => {
 // จัดการคำสั่งสรุป
 const handleSummaryCommand = async (replyToken, userId) => {
   try {
-    const result = createWeeklySummary(userId);
+    const result = await createWeeklySummary(userId);
     
     if (result.success) {
       await replyMessage(replyToken, result.message);
@@ -221,6 +238,49 @@ const handleHelpCommand = async (replyToken) => {
     { label: "สรุป", text: "สรุป" },
     { label: "เมนู", text: "เมนู" },
   ]);
+};
+
+// จัดการการติ๊กเช็กลิสต์รายท่า (บันทึกรายการเดียวแบบ idempotent)
+const handleToggleExerciseCommand = async (replyToken, userId, rawIdx) => {
+  try {
+    const idx = parseInt(rawIdx, 10);
+    if (Number.isNaN(idx)) {
+      await replyMessage(replyToken, "รูปแบบข้อมูลไม่ถูกต้อง");
+      return;
+    }
+
+    // อ่านแผนของวันนี้เพื่อทราบชื่อท่า
+    const today = new Date();
+    const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const todayKey = dayKeys[today.getDay()];
+    const planResult = await createExerciseNotification(userId, todayKey);
+    const exercises = planResult?.exerciseData?.exercises || [];
+    const target = exercises[idx];
+    if (!target) {
+      await replyMessage(replyToken, "ไม่พบรายการท่าที่เลือก");
+      return;
+    }
+
+    // บันทึก 1 แถวแบบ idempotent
+    const row = [
+      userId,
+      new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }),
+      planResult.exerciseData.day,
+      'Exercise Confirmed',
+      `${idx + 1}. ${target.name}`,
+      target.sets ?? '',
+      target.reps ?? target.duration ?? '',
+      'single'
+    ];
+    // ใช้ appendRowsIfNotExists ผ่าน exercise.service (นำเข้าที่นั่น) หรือเรียกตรง sheet.service ก็ได้
+    const { appendRowsIfNotExists } = await import('../services/sheet.service.js');
+    await appendRowsIfNotExists([row]);
+
+    await replyMessage(replyToken, `บันทึกแล้ว: ${target.name}`);
+  } catch (error) {
+    console.error('Error in handleToggleExerciseCommand:', error);
+    await replyMessage(replyToken, "เกิดข้อผิดพลาดในการบันทึก");
+  }
 };
 
 // จัดการคำสั่งเมนู (Flex + Postback)

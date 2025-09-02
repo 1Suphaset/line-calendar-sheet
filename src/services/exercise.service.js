@@ -1,6 +1,6 @@
 import { getTodayExercise, getExerciseByDay, formatExerciseMessage } from "../data/exerciseSchedule.js";
 import { insertEvent } from "./calendar.service.js";
-import { appendRow } from "./sheet.service.js";
+import { appendRow, appendRows, readRows, appendRowsIfNotExists, nowInBangkokString } from "./sheet.service.js";
 
 // เก็บสถานะการยืนยันของผู้ใช้
 const userConfirmations = new Map();
@@ -86,6 +86,8 @@ export const handleExerciseConfirmation = async (userId, confirmed) => {
     const today = new Date();
     const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
     const todayName = dayNames[today.getDay()];
+    const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const todayKey = dayKeys[today.getDay()];
     
     // บันทึกการยืนยัน
     userConfirmations.set(userId, {
@@ -95,13 +97,28 @@ export const handleExerciseConfirmation = async (userId, confirmed) => {
     });
 
     // บันทึกลง Google Sheets
-    await appendRow([
+    const baseRow = [
       userId,
-      new Date().toLocaleString(),
+      nowInBangkokString(),
       todayName,
       confirmed ? "Exercise Confirmed" : "Exercise Skipped",
-      confirmed ? "✅ ยืนยันแล้ว" : "❌ ข้าม"
-    ]);
+    ];
+
+    if (confirmed) {
+      // เก็บรายละเอียดท่าที่ทำในวันนี้แบบต่อแถว
+      const todayPlan = getExerciseByDay(todayKey);
+      const rows = Array.isArray(todayPlan?.exercises)
+        ? todayPlan.exercises.map((ex, idx) => [
+            ...baseRow,
+            `${idx + 1}. ${ex.name}`,
+            ex.sets ?? '',
+            ex.reps ?? ex.duration ?? '',
+          ])
+        : [[...baseRow, 'Rest Day', '', '']];
+      await appendRowsIfNotExists(rows);
+    } else {
+      await appendRowsIfNotExists([[...baseRow, 'Skipped', '', '']]);
+    }
 
     let message = "";
     if (confirmed) {
@@ -151,53 +168,88 @@ export const getUserConfirmationStatus = (userId) => {
 };
 
 // สร้างข้อความสรุปการออกกำลังกายประจำสัปดาห์
-export const createWeeklySummary = (userId) => {
+export const createWeeklySummary = async (userId) => {
   try {
     const today = new Date();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay()); // เริ่มจากวันอาทิตย์
-    
-    let confirmedDays = 0;
-    let totalDays = 0;
-    
-    // นับการยืนยันในสัปดาห์นี้
-    for (let i = 0; i < 7; i++) {
-      const checkDate = new Date(weekStart);
-      checkDate.setDate(weekStart.getDate() + i);
-      
-      if (checkDate <= today) {
-        totalDays++;
-        // ตรวจสอบการยืนยัน (ในระบบจริงควรเก็บในฐานข้อมูล)
-        // สำหรับตอนนี้จะใช้ข้อมูลจาก memory
+
+    const allRows = await readRows();
+    const records = Array.isArray(allRows) ? allRows.slice(1) : []; // skip header if present
+
+    const start = new Date(weekStart);
+    const end = new Date(today);
+
+    const userRows = records.filter(r => r[0] === userId).filter(r => {
+      const ts = new Date(r[1]);
+      return ts >= start && ts <= end;
+    });
+
+    const dailyMap = new Map();
+    userRows.forEach(r => {
+      const dateKey = new Date(r[1]).toDateString();
+      const action = r[3];
+      const exercise = r[4];
+      const sets = r[5];
+      const reps = r[6];
+      if (!dailyMap.has(dateKey)) dailyMap.set(dateKey, { confirmed: false, exercises: [] });
+      const entry = dailyMap.get(dateKey);
+      if (action === 'Exercise Confirmed') entry.confirmed = true;
+      if (exercise && exercise !== 'Skipped' && exercise !== 'Rest Day') {
+        entry.exercises.push({ exercise, sets, reps });
       }
-    }
-    
-    const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
-    const todayName = dayNames[today.getDay()];
-    
-    let message = `📊 สรุปการออกกำลังกายสัปดาห์นี้\n\n`;
-    message += `📅 วันที่: ${weekStart.toLocaleDateString('th-TH')} - ${today.toLocaleDateString('th-TH')}\n`;
-    message += `✅ วันที่มีการยืนยัน: ${confirmedDays}/${totalDays} วัน\n\n`;
-    
-    if (confirmedDays === totalDays) {
-      message += `🏆 ยอดเยี่ยม! คุณออกกำลังกายครบทุกวันในสัปดาห์นี้\n`;
-      message += `💪 เก่งมาก! ความสม่ำเสมอคือกุญแจสู่ความสำเร็จ`;
-    } else if (confirmedDays >= totalDays * 0.7) {
-      message += `👍 ดีมาก! คุณออกกำลังกายสม่ำเสมอ\n`;
-      message += `💡 ลองเพิ่มความถี่ให้ครบทุกวันดูสิ`;
-    } else {
-      message += `💪 ยังมีโอกาสปรับปรุงได้\n`;
-      message += `🎯 ลองตั้งเป้าหมายเล็กๆ และทำทีละขั้น`;
-    }
-    
-    message += `\n\n🔄 พร้อมสำหรับการออกกำลังกายวัน${todayName} หรือยัง?`;
-    
-    return {
-      success: true,
-      message: message,
-      confirmedDays: confirmedDays,
-      totalDays: totalDays
+    });
+
+    const days = Array.from(dailyMap.values());
+    const confirmedDays = days.filter(d => d.confirmed).length;
+    const totalDays = 7; // normalize against full week
+    const totalSets = days.reduce((sum, d) => sum + d.exercises.reduce((s, e) => s + (parseInt(e.sets, 10) || 0), 0), 0);
+
+    let topExercises = new Map();
+    days.forEach(d => d.exercises.forEach(e => {
+      const key = e.exercise;
+      topExercises.set(key, (topExercises.get(key) || 0) + 1);
+    }));
+    const topList = Array.from(topExercises.entries()).sort((a,b) => b[1]-a[1]).slice(0,3);
+
+    // Flex Summary
+    const flex = {
+      type: 'flex',
+      altText: 'สรุปการออกกำลังกายสัปดาห์นี้',
+      contents: {
+        type: 'bubble',
+        header: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '📊 สรุปสัปดาห์', weight: 'bold', size: 'lg' },
+            { type: 'text', text: `${weekStart.toLocaleDateString('th-TH')} - ${today.toLocaleDateString('th-TH')}`, size: 'xs', color: '#888888', margin: 'sm' },
+          ],
+        },
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'box', layout: 'baseline', contents: [ { type: 'text', text: '✅ วันที่ยืนยัน', flex: 5, size: 'sm' }, { type: 'text', text: `${confirmedDays}/${totalDays}`, flex: 3, align: 'end', size: 'sm', weight: 'bold' } ], margin: 'sm' },
+            { type: 'box', layout: 'baseline', contents: [ { type: 'text', text: '🧮 เซ็ตทั้งหมด', flex: 5, size: 'sm' }, { type: 'text', text: `${totalSets}`, flex: 3, align: 'end', size: 'sm', weight: 'bold' } ], margin: 'sm' },
+            ...(topList.length ? [ { type: 'text', text: '🏅 ท่าที่ทำบ่อย', weight: 'bold', size: 'sm', margin: 'md' } ] : []),
+            ...topList.map(([name, count]) => ({ type: 'box', layout: 'baseline', contents: [ { type: 'text', text: name, size: 'xs', flex: 6, wrap: true }, { type: 'text', text: `${count} วัน`, size: 'xs', flex: 2, align: 'end' } ], margin: 'xs' })),
+          ],
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'button', style: 'primary', color: '#1DB446', action: { type: 'postback', label: 'ดูตารางวันนี้', data: 'get_exercise', displayText: 'ออกกำลังกาย' } },
+            { type: 'button', style: 'secondary', action: { type: 'message', label: 'เมนู', text: 'เมนู' } },
+          ],
+        },
+      },
     };
+
+    const message = `📊 สรุปการออกกำลังกายสัปดาห์นี้พร้อมแล้ว`;
+
+    return { success: true, message, confirmedDays, totalDays, totalSets, topExercises: topList, flex };
   } catch (error) {
     console.error("Error creating weekly summary:", error);
     return {

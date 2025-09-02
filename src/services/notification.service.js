@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { sendPushMessage, sendPushFlexMessage } from "./line.service.js";
-import { createExerciseNotification } from "./exercise.service.js";
+import { createExerciseNotification, createWeeklySummary } from "./exercise.service.js";
 import { getTodayExercise, formatExerciseMessage } from "../data/exerciseSchedule.js";
 
 // เก็บรายการผู้ใช้ที่ต้องการรับการแจ้งเตือน
@@ -150,16 +150,14 @@ const sendEveningReminder = async () => {
 // การแจ้งเตือนสรุปสัปดาห์
 const sendWeeklySummary = async () => {
   try {
-    const message = 
-      "📊 สรุปการออกกำลังกายสัปดาห์นี้\n\n" +
-      "🎯 เป้าหมาย: ออกกำลังกาย 7 วัน\n" +
-      "✅ ความสำเร็จ: ขึ้นอยู่กับการยืนยันของคุณ\n\n" +
-      "💪 สัปดาห์หน้า พยายามให้ดีขึ้น!\n" +
-      "พิมพ์ 'สรุป' เพื่อดูสถิติการออกกำลังกายของคุณ";
-
     const promises = Array.from(subscribedUsers).map(async (userId) => {
       try {
-        await sendPushMessage(userId, message);
+        const result = await createWeeklySummary(userId);
+        if (result.success && result.flex) {
+          await sendPushFlexMessage(userId, { type: 'flex', altText: 'สรุปสัปดาห์', contents: result.flex.contents });
+        } else {
+          await sendPushMessage(userId, result.message || "📊 ยังไม่มีข้อมูลสรุปในสัปดาห์นี้");
+        }
       } catch (error) {
         console.error(`Failed to send weekly summary to user ${userId}:`, error);
         subscribedUsers.delete(userId);
