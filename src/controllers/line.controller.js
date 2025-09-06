@@ -460,38 +460,83 @@ const createExerciseFlexMessageByDay = (exerciseData, messageFallback) => {
   if (!exerciseData) return { type: "text", text: messageFallback };
 
   const exercises = Array.isArray(exerciseData.exercises) ? exerciseData.exercises : [];
-  const checklistContents = exercises.length
-    ? exercises.map((ex, idx) => ({
+
+  const checklistContents = exercises.map((ex, idx) => {
+    const contents = [];
+
+    // ใส่รูปภาพถ้ามี
+    if (ex.image) {
+      contents.push({
+        type: "image",
+        url: ex.image,
+        size: "sm",
+        aspectMode: "cover",
+        flex: 2
+      });
+    }
+
+    // ชื่อท่า
+    contents.push({
+      type: "text",
+      text: `${idx + 1}. ${ex.name ?? "-"}`,
+      size: "sm",
+      wrap: true,
+      flex: 6
+    });
+
+    // Sets/Reps/Duration
+    contents.push({
+      type: "text",
+      text: ex.sets ? `Sets: ${ex.sets}  Reps/Duration: ${ex.reps ?? ex.duration ?? "-"}` : "-",
+      size: "sm",
+      color: "#888888",
+      wrap: true,
+      flex: 4
+    });
+
+    return {
       type: "box",
       layout: "horizontal",
-      contents: [
-        ex.image ? { type: "image", url: ex.image, size: "sm", aspectMode: "cover", flex: 2 } : {},
-        { type: "text", text: `${idx + 1}. ${ex.name}`, size: "sm", wrap: true, flex: 6 },
-        { type: "text", text: ex.sets ? `Sets: ${ex.sets}  Reps: ${ex.reps ?? ex.duration ?? "-"}` : "", size: "sm", color: "#888888", wrap: true, flex: 4 }
-      ],
+      contents,
       margin: "sm"
-    }))
+    };
+  });
+
+  // ถ้าไม่มีท่าใด ๆ
+  const bodyContents = exercises.length
+    ? [
+        { type: "text", text: exerciseData.focus ? `🎯 โฟกัส: ${exerciseData.focus}` : "", size: "sm", wrap: true, margin: "xs" },
+        { type: "text", text: "เช็กลิสต์รายท่า:", weight: "bold", margin: "md", size: "sm" },
+        ...checklistContents,
+        exerciseData.rest ? { type: "text", text: `⏱️ พัก: ${exerciseData.rest}`, size: "sm", color: "#888888", wrap: true, margin: "md" } : {}
+      ]
     : [{ type: "text", text: messageFallback, wrap: true, size: "sm" }];
+
+  // กรอง empty objects
+  const filteredBodyContents = bodyContents.filter(c => c && (c.type !== "text" || c.text));
 
   return {
     type: "flex",
     altText: `ตารางออกกำลังกายวัน${exerciseData.day}`,
     contents: {
       type: "bubble",
-      header: { type: "box", layout: "vertical", contents: [{ type: "text", text: `🏋️‍♀️ ตารางออกกำลังกายวัน${exerciseData.day}`, weight: "bold", size: "lg", color: "#1DB446" }] },
-      body: {
+      header: {
         type: "box",
         layout: "vertical",
         contents: [
-          { type: "text", text: exerciseData.focus ? `🎯 โฟกัส: ${exerciseData.focus}` : "", size: "sm", wrap: true, margin: "xs" },
-          exercises.length ? { type: "text", text: "เช็กลิสต์รายท่า:", weight: "bold", margin: "md", size: "sm" } : {},
-          ...checklistContents,
-          exerciseData.rest ? { type: "text", text: `⏱️ พัก: ${exerciseData.rest}`, size: "sm", color: "#888888", wrap: true, margin: "md" } : {}
+          { type: "text", text: `🏋️‍♀️ ตารางออกกำลังกายวัน${exerciseData.day}`, weight: "bold", size: "lg", color: "#1DB446" }
         ]
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: filteredBodyContents
       }
     }
   };
-};// ฟังก์ชัน handle สำหรับดูตารางแต่ละวัน
+};
+
+// ฟังก์ชัน handle สำหรับดูตารางแต่ละวัน
 const handleExerciseByDayCommand = async (replyToken, dayKey) => {
   try {
     const exerciseData = exerciseSchedule[dayKey];
