@@ -1,7 +1,7 @@
 import { getTodayExercise, getExerciseByDay, formatExerciseMessage } from "../data/exerciseSchedule.js";
 // import { insertEvent } from "./calendar.service.js";
 // import { appendRow } from "./sheet.service.js";
-import { getTodayString } from "../utils/dateTime.js";
+import { getTodayString ,getTodayBangkok} from "../utils/dateTime.js";
 // เก็บสถานะการยืนยันของผู้ใช้
 const userConfirmations = new Map();
 
@@ -57,7 +57,7 @@ export const createExerciseCalendarEvent = async (userId, exerciseData) => {
 // จัดการการยืนยันการออกกำลังกาย
 export const handleExerciseConfirmation = async (userId, confirmed) => {
   try {
-    const today = getTodayString();
+    const today = getTodayBangkok();
     const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
     const todayName = dayNames[today.getDay()];
     
@@ -121,7 +121,7 @@ export const getUserConfirmationStatus = (userId) => {
 // สร้างข้อความสรุปการออกกำลังกายประจำสัปดาห์
 export const createWeeklySummary = (userId) => {
   try {
-    const today = getTodayString();
+    const today = getTodayBangkok();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay()); // เริ่มจากวันอาทิตย์
     

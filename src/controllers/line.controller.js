@@ -13,7 +13,7 @@ import {
   testNotification 
 } from "../services/notification.service.js";
 
-import { getTodayString } from "../utils/dateTime.js";
+import { getTodayString ,getTodayBangkok} from "../utils/dateTime.js";
 
 export const handleLineWebhook = async (req, res) => {
   try {
@@ -269,7 +269,7 @@ const handleToggleExerciseCommand = async (replyToken, userId, rawIdx) => {
     }
 
     // อ่านแผนของวันนี้เพื่อทราบชื่อท่า
-    const today = getTodayString();
+    const today = getTodayBangkok();
     const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayKey = dayKeys[today.getDay()];
     const planResult = await createExerciseNotification(userId, todayKey);

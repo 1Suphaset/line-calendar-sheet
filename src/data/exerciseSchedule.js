@@ -1,4 +1,4 @@
-import { getTodayString } from "../utils/dateTime.js";
+import { getTodayString,getTodayBangkok } from "../utils/dateTime.js";
 // ตารางการออกกำลังกาย 7 วัน
 export const exerciseSchedule = {
   monday: {
@@ -76,7 +76,7 @@ export const exerciseSchedule = {
 
 // ฟังก์ชันสำหรับดึงการออกกำลังกายของวัน
 export const getTodayExercise = () => {
-  const today = getTodayString();
+  const today = getTodayBangkok();
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const dayKey = dayNames[today.getDay()];
   return exerciseSchedule[dayKey];
