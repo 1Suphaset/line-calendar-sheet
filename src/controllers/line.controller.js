@@ -1,19 +1,19 @@
 import { replyMessage, replyWithQuickReply, sendFlexMessage } from "../services/line.service.js";
 import { appendRow } from "../services/sheet.service.js";
-import { 
-  createExerciseNotification, 
-  handleExerciseConfirmation, 
+import {
+  createExerciseNotification,
+  handleExerciseConfirmation,
   getUserConfirmationStatus,
-  createWeeklySummary 
+  createWeeklySummary
 } from "../services/exercise.service.js";
-import { 
-  subscribeUser, 
-  unsubscribeUser, 
+import {
+  subscribeUser,
+  unsubscribeUser,
   isUserSubscribed,
-  testNotification 
+  testNotification
 } from "../services/notification.service.js";
 
-import { getTodayString ,getTodayBangkok} from "../utils/dateTime.js";
+import { getTodayString, getTodayBangkok } from "../utils/dateTime.js";
 
 export const handleLineWebhook = async (req, res) => {
   try {
@@ -28,7 +28,7 @@ export const handleLineWebhook = async (req, res) => {
         // จัดการคำสั่งต่างๆ
         if (userMessage === "ออกกำลังกาย" || userMessage === "exercise") {
           await handleExerciseCommand(replyToken, userId);
-        } 
+        }
         else if (userMessage === "ยืนยัน" || userMessage === "confirm") {
           await handleConfirmationCommand(replyToken, userId, true);
         }
@@ -52,6 +52,9 @@ export const handleLineWebhook = async (req, res) => {
         }
         else if (userMessage === "เมนู" || userMessage === "menu") {
           await handleMenuCommand(replyToken);
+        }
+        else if (userMessage === "ตาราง" || userMessage === "schedule") {
+          await handleDaySelection(replyToken);
         }
         else {
           // คำสั่งไม่รู้จัก
@@ -96,83 +99,54 @@ export const handleLineWebhook = async (req, res) => {
     res.status(500).send("Error");
   }
 };
+const createExerciseFlexMessage = (exerciseData, messageFallback) => {
+  const exercises = Array.isArray(exerciseData?.exercises) ? exerciseData.exercises : [];
+  const checklistContents = exercises.length
+    ? exercises.map((ex, idx) => ({
+      type: "box",
+      layout: "horizontal",
+      contents: [
+        ex.image ? { type: "image", url: ex.image, size: "sm", aspectMode: "cover", flex: 2 } : {},
+        { type: "text", text: `${idx + 1}. ${ex.name}`, size: "sm", wrap: true, flex: 6 },
+        { type: "text", text: ex.sets ? `Sets: ${ex.sets}  Reps/Duration: ${ex.reps ?? ex.duration ?? "-"}` : "", size: "sm", color: "#888888", wrap: true, margin: "xs" },
+        { type: "button", style: "secondary", height: "sm", flex: 2, action: { type: "postback", label: "✅", data: `action=toggle_exercise&idx=${idx}`, displayText: `ทำแล้ว: ${ex.name}` } }
+      ],
+      margin: "sm"
+    }))
+    : [{ type: "text", text: messageFallback, wrap: true, size: "sm" }];
+
+
+  return {
+    type: "flex",
+    altText: "ตารางการออกกำลังกายวันนี้",
+    contents: {
+      type: "bubble",
+      header: { type: "box", layout: "vertical", contents: [{ type: "text", text: "🏋️‍♀️ การออกกำลังกายวันนี้", weight: "bold", size: "lg", color: "#1DB446" }] },
+      body: {
+        type: "box", layout: "vertical", contents: [
+          { type: "text", text: exerciseData?.focus ? `🎯 โฟกัส: ${exerciseData.focus}` : "", size: "sm", wrap: true, margin: "xs" },
+          { type: "text", text: "เช็กลิสต์รายท่า:", weight: "bold", margin: "md", size: "sm" },
+          ...checklistContents
+        ]
+      },
+      footer: {
+        type: "box", layout: "vertical", contents: [
+          { type: "button", action: { type: "postback", label: "✅ ยืนยันออกกำลังกาย", data: "confirm_exercise", displayText: "ยืนยันออกกำลังกายแล้ว" }, style: "primary", color: "#1DB446" },
+          { type: "button", action: { type: "postback", label: "⏭️ ข้ามวันนี้", data: "skip_exercise", displayText: "ข้ามการออกกำลังกายวันนี้" }, style: "secondary" }
+        ]
+      }
+    }
+  };
+};
 
 // จัดการคำสั่งออกกำลังกาย
 const handleExerciseCommand = async (replyToken, userId) => {
   try {
     const result = await createExerciseNotification(userId);
-    
+
     if (result.success) {
-      // สร้าง Flex Message พร้อมปุ่มยืนยัน และเช็กลิสต์รายท่า
-      const checklistContents = Array.isArray(result.exerciseData.exercises)
-        ? result.exerciseData.exercises.map((ex, idx) => ({
-            type: "box",
-            layout: "horizontal",
-            contents: [
-              { type: "text", text: `${idx + 1}. ${ex.name}`, size: "sm", wrap: true, flex: 6 },
-              { type: "button", style: "secondary", height: "sm", flex: 2, action: { type: "postback", label: "✅", data: `action=toggle_exercise&idx=${idx}`, displayText: `ทำแล้ว: ${ex.name}` } }
-            ],
-            margin: "sm"
-          }))
-        : [{ type: "text", text: result.message, wrap: true, size: "sm" }];
 
-      const flexMessage = {
-        type: "flex",
-        altText: "ตารางการออกกำลังกายวันนี้",
-        contents: {
-          type: "bubble",
-          header: {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              {
-                type: "text",
-                text: "🏋️‍♀️ การออกกำลังกายวันนี้",
-                weight: "bold",
-                size: "lg",
-                color: "#1DB446"
-              }
-            ]
-          },
-          body: {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              { type: "text", text: result.exerciseData.focus ? `🎯 โฟกัส: ${result.exerciseData.focus}` : "", size: "sm", wrap: true, margin: "xs" },
-              { type: "text", text: "เช็กลิสต์รายท่า:", weight: "bold", margin: "md", size: "sm" },
-              ...checklistContents
-            ]
-          },
-          footer: {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              {
-                type: "button",
-                action: {
-                  type: "postback",
-                  label: "✅ ยืนยันออกกำลังกาย",
-                  data: "confirm_exercise",
-                  displayText: "ยืนยันออกกำลังกายแล้ว"
-                },
-                style: "primary",
-                color: "#1DB446"
-              },
-              {
-                type: "button",
-                action: {
-                  type: "postback",
-                  label: "⏭️ ข้ามวันนี้",
-                  data: "skip_exercise",
-                  displayText: "ข้ามการออกกำลังกายวันนี้"
-                },
-                style: "secondary"
-              }
-            ]
-          }
-        }
-      };
-
+      const flexMessage = createExerciseFlexMessage(result.exerciseData, result.message);
       await sendFlexMessage(replyToken, flexMessage);
     } else {
       await replyMessage(replyToken, result.message);
@@ -190,7 +164,7 @@ const handleConfirmationCommand = async (replyToken, userId, confirmed) => {
 
     if (status.hasConfirmed) {
       await replyMessage(
-        replyToken, 
+        replyToken,
         "✅ คุณได้บันทึกการออกกำลังกายสำหรับวันนี้แล้ว\n" +
         `เวลา: ${status.timestamp}`
       );
@@ -202,10 +176,10 @@ const handleConfirmationCommand = async (replyToken, userId, confirmed) => {
 
     if (result.success) {
       if (result.flex) {
-        await sendFlexMessage(replyToken, { 
-          type: 'flex', 
-          altText: 'สรุปสัปดาห์', 
-          contents: result.flex.contents 
+        await sendFlexMessage(replyToken, {
+          type: 'flex',
+          altText: 'สรุปสัปดาห์',
+          contents: result.flex.contents
         });
       } else {
         await replyMessage(replyToken, result.message);
@@ -224,7 +198,7 @@ const handleConfirmationCommand = async (replyToken, userId, confirmed) => {
 const handleSummaryCommand = async (replyToken, userId) => {
   try {
     const result = await createWeeklySummary(userId);
-    
+
     if (result.success) {
       await replyMessage(replyToken, result.message);
     } else {
@@ -238,7 +212,7 @@ const handleSummaryCommand = async (replyToken, userId) => {
 
 // จัดการคำสั่งช่วยเหลือ
 const handleHelpCommand = async (replyToken) => {
-  const helpMessage = 
+  const helpMessage =
     "🤖 คำสั่งที่ใช้ได้:\n\n" +
     "🏋️‍♀️ 'ออกกำลังกาย' - ดูตารางออกกำลังกายวันนี้\n" +
     "✅ 'ยืนยัน' - ยืนยันว่าออกกำลังกายแล้ว\n" +
@@ -256,6 +230,7 @@ const handleHelpCommand = async (replyToken) => {
     { label: "ข้าม", text: "ข้าม" },
     { label: "สรุป", text: "สรุป" },
     { label: "เมนู", text: "เมนู" },
+    { label: "ตาราง", text: "ตาราง" },
   ]);
 };
 
@@ -275,7 +250,7 @@ const handleToggleExerciseCommand = async (replyToken, userId, rawIdx) => {
     const planResult = await createExerciseNotification(userId, todayKey);
     const exercises = planResult?.exerciseData?.exercises || [];
     const target = exercises[idx];
-    if (!target) {
+    if (!Array.isArray(exercises) || !target) {
       await replyMessage(replyToken, "ไม่พบรายการท่าที่เลือก");
       return;
     }
@@ -301,8 +276,7 @@ const handleToggleExerciseCommand = async (replyToken, userId, rawIdx) => {
     await replyMessage(replyToken, "เกิดข้อผิดพลาดในการบันทึก");
   }
 };
-
-// จัดการคำสั่งเมนู (Flex + Postback)
+// จัดการคำสั่งเมนู (Flex + Postback) แบบสวยและทันสมัย
 const handleMenuCommand = async (replyToken) => {
   const menuFlex = {
     type: "flex",
@@ -310,6 +284,7 @@ const handleMenuCommand = async (replyToken) => {
     contents: {
       type: "carousel",
       contents: [
+        // Bubble 1: เริ่มออกกำลังกาย
         {
           type: "bubble",
           hero: {
@@ -322,14 +297,16 @@ const handleMenuCommand = async (replyToken) => {
           body: {
             type: "box",
             layout: "vertical",
+            spacing: "md",
             contents: [
-              { type: "text", text: "เริ่มออกกำลังกาย", weight: "bold", size: "md" },
-              { type: "text", text: "ดูตารางของวันนี้", size: "sm", color: "#888888" },
+              { type: "text", text: "🏋️‍♀️ เริ่มออกกำลังกาย", weight: "bold", size: "lg" },
+              { type: "text", text: "ดูตารางของวันนี้และเริ่มบันทึก", size: "sm", color: "#555555", wrap: true },
             ],
           },
           footer: {
             type: "box",
             layout: "vertical",
+            spacing: "sm",
             contents: [
               {
                 type: "button",
@@ -340,41 +317,57 @@ const handleMenuCommand = async (replyToken) => {
             ],
           },
         },
+        // Bubble 2: ยืนยัน/ข้าม
         {
           type: "bubble",
           body: {
             type: "box",
             layout: "vertical",
+            spacing: "md",
             contents: [
-              { type: "text", text: "ยืนยัน/ข้าม", weight: "bold", size: "md" },
-              { type: "text", text: "อัปเดตสถานะวันนี้", size: "sm", color: "#888888" },
+              { type: "text", text: "✅ ยืนยัน / ⏭️ ข้าม", weight: "bold", size: "lg" },
+              { type: "text", text: "อัปเดตสถานะการออกกำลังกายของวันนี้", size: "sm", color: "#555555", wrap: true },
             ],
           },
           footer: {
             type: "box",
             layout: "vertical",
+            spacing: "sm",
             contents: [
-              { type: "button", style: "primary", color: "#1DB446", action: { type: "postback", label: "ยืนยัน", data: "confirm_exercise", displayText: "ยืนยัน" } },
-              { type: "button", style: "secondary", action: { type: "postback", label: "ข้าม", data: "skip_exercise", displayText: "ข้าม" } },
+              {
+                type: "button",
+                style: "primary",
+                color: "#1DB446",
+                action: { type: "postback", label: "ยืนยัน", data: "confirm_exercise", displayText: "ยืนยัน" },
+              },
+              {
+                type: "button",
+                style: "secondary",
+                color: "#AAAAAA",
+                action: { type: "postback", label: "ข้าม", data: "skip_exercise", displayText: "ข้าม" },
+              },
             ],
           },
         },
+        // Bubble 3: สรุป / ช่วยเหลือ
         {
           type: "bubble",
           body: {
             type: "box",
             layout: "vertical",
+            spacing: "md",
             contents: [
-              { type: "text", text: "อื่น ๆ", weight: "bold", size: "md" },
-              { type: "text", text: "สรุป/ช่วยเหลือ", size: "sm", color: "#888888" },
+              { type: "text", text: "📊 อื่น ๆ", weight: "bold", size: "lg" },
+              { type: "text", text: "ดูสรุปการออกกำลังกายและคำแนะนำ", size: "sm", color: "#555555", wrap: true },
             ],
           },
           footer: {
             type: "box",
             layout: "vertical",
+            spacing: "sm",
             contents: [
-              { type: "button", style: "primary", action: { type: "message", label: "ดูสรุป", text: "สรุป" } },
-              { type: "button", style: "secondary", action: { type: "message", label: "ช่วยเหลือ", text: "ช่วยเหลือ" } },
+              { type: "button", style: "primary", color: "#1DB446", action: { type: "message", label: "ดูสรุป", text: "สรุป" } },
+              { type: "button", style: "secondary", color: "#AAAAAA", action: { type: "message", label: "ช่วยเหลือ", text: "ช่วยเหลือ" } },
             ],
           },
         },
@@ -389,7 +382,7 @@ const handleMenuCommand = async (replyToken) => {
 const handleSubscribeCommand = async (replyToken, userId) => {
   try {
     if (isUserSubscribed(userId)) {
-      await replyMessage(replyToken, 
+      await replyMessage(replyToken,
         "✅ คุณได้สมัครรับการแจ้งเตือนแล้ว!\n\n" +
         "🔔 คุณจะได้รับแจ้งเตือนการออกกำลังกาย:\n" +
         "• ตอน 7:00 น. ทุกวัน\n" +
@@ -399,7 +392,7 @@ const handleSubscribeCommand = async (replyToken, userId) => {
       );
     } else {
       subscribeUser(userId);
-      await replyMessage(replyToken, 
+      await replyMessage(replyToken,
         "🎉 สมัครรับการแจ้งเตือนสำเร็จ!\n\n" +
         "🔔 คุณจะได้รับแจ้งเตือนการออกกำลังกาย:\n" +
         "• ตอน 7:00 น. ทุกวัน\n" +
@@ -419,13 +412,13 @@ const handleUnsubscribeCommand = async (replyToken, userId) => {
   try {
     if (isUserSubscribed(userId)) {
       unsubscribeUser(userId);
-      await replyMessage(replyToken, 
+      await replyMessage(replyToken,
         "🔕 ยกเลิกการแจ้งเตือนสำเร็จ!\n\n" +
         "คุณจะไม่ได้รับแจ้งเตือนการออกกำลังกายอีกต่อไป\n\n" +
         "💡 พิมพ์ 'สมัคร' หากต้องการรับการแจ้งเตือนอีกครั้ง"
       );
     } else {
-      await replyMessage(replyToken, 
+      await replyMessage(replyToken,
         "❌ คุณยังไม่ได้สมัครรับการแจ้งเตือน\n\n" +
         "พิมพ์ 'สมัคร' หากต้องการรับการแจ้งเตือนการออกกำลังกาย"
       );
@@ -440,15 +433,15 @@ const handleUnsubscribeCommand = async (replyToken, userId) => {
 const handleTestCommand = async (replyToken, userId) => {
   try {
     const result = await testNotification(userId);
-    
+
     if (result.success) {
-      await replyMessage(replyToken, 
+      await replyMessage(replyToken,
         "🧪 ทดสอบการแจ้งเตือนสำเร็จ!\n\n" +
         "คุณควรได้รับข้อความแจ้งเตือนการออกกำลังกายแล้ว\n\n" +
         "💡 หากไม่ได้รับข้อความ ให้ตรวจสอบว่าได้สมัครรับการแจ้งเตือนแล้วหรือยัง"
       );
     } else {
-      await replyMessage(replyToken, 
+      await replyMessage(replyToken,
         "❌ การทดสอบล้มเหลว\n\n" +
         "กรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ดูแลระบบ"
       );
@@ -457,4 +450,78 @@ const handleTestCommand = async (replyToken, userId) => {
     console.error("Error in handleTestCommand:", error);
     await replyMessage(replyToken, "เกิดข้อผิดพลาดในการทดสอบ");
   }
+
+  // ฟังก์ชันสำหรับสร้าง Flex Message ของแต่ละวัน
+  const createExerciseFlexMessageByDay = (exerciseData, messageFallback) => {
+    if (!exerciseData) return { type: "text", text: messageFallback };
+
+    const exercises = Array.isArray(exerciseData.exercises) ? exerciseData.exercises : [];
+    const checklistContents = exercises.length
+      ? exercises.map((ex, idx) => ({
+        type: "box",
+        layout: "horizontal",
+        contents: [
+          ex.image ? { type: "image", url: ex.image, size: "sm", aspectMode: "cover", flex: 2 } : {},
+          { type: "text", text: `${idx + 1}. ${ex.name}`, size: "sm", wrap: true, flex: 6 },
+          { type: "text", text: ex.sets ? `Sets: ${ex.sets}  Reps: ${ex.reps ?? ex.duration ?? "-"}` : "", size: "sm", color: "#888888", wrap: true, flex: 4 }
+        ],
+        margin: "sm"
+      }))
+      : [{ type: "text", text: messageFallback, wrap: true, size: "sm" }];
+
+    return {
+      type: "flex",
+      altText: `ตารางออกกำลังกายวัน${exerciseData.day}`,
+      contents: {
+        type: "bubble",
+        header: { type: "box", layout: "vertical", contents: [{ type: "text", text: `🏋️‍♀️ ตารางออกกำลังกายวัน${exerciseData.day}`, weight: "bold", size: "lg", color: "#1DB446" }] },
+        body: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            { type: "text", text: exerciseData.focus ? `🎯 โฟกัส: ${exerciseData.focus}` : "", size: "sm", wrap: true, margin: "xs" },
+            exercises.length ? { type: "text", text: "เช็กลิสต์รายท่า:", weight: "bold", margin: "md", size: "sm" } : {},
+            ...checklistContents,
+            exerciseData.rest ? { type: "text", text: `⏱️ พัก: ${exerciseData.rest}`, size: "sm", color: "#888888", wrap: true, margin: "md" } : {}
+          ]
+        }
+      }
+    };
+  };// ฟังก์ชัน handle สำหรับดูตารางแต่ละวัน
+  const handleExerciseByDayCommand = async (replyToken, dayKey) => {
+    try {
+      const exerciseData = exerciseSchedule[dayKey];
+      if (!exerciseData) {
+        await replyMessage(replyToken, "❌ ไม่พบตารางสำหรับวันนั้น");
+        return;
+      }
+
+      const flexMessage = createExerciseFlexMessageByDay(exerciseData, "❌ ไม่พบตารางออกกำลังกาย");
+      await sendFlexMessage(replyToken, flexMessage);
+    } catch (error) {
+      console.error("Error in handleExerciseByDayCommand:", error);
+      await replyMessage(replyToken, "เกิดข้อผิดพลาดในการดึงตารางออกกำลังกาย");
+    }
+  };
+
+  // ฟังก์ชัน handleDaySelection (เรียกจาก webhook)
+  const handleDaySelection = async (replyToken, userMessage) => {
+    const dayMap = {
+      "วันจันทร์": "monday",
+      "วันอังคาร": "tuesday",
+      "วันพุธ": "wednesday",
+      "วันพฤหัส": "thursday",
+      "วันศุกร์": "friday",
+      "วันเสาร์": "saturday",
+      "วันอาทิตย์": "sunday",
+    };
+    const dayKey = dayMap[userMessage];
+    if (dayKey) {
+      await handleExerciseByDayCommand(replyToken, dayKey);
+    } else {
+      // ส่ง Quick Reply ให้เลือกวัน
+      await replyWithQuickReply(replyToken, "โปรดเลือกวัน:", quickReplyDayMenu);
+    }
+  };
+
 };
