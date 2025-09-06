@@ -105,19 +105,25 @@ export const setupNotifications = () => {
   cron.schedule("0 7 * * *", () => {
     console.log("Sending morning exercise reminders...");
     sendExerciseReminder();
-  });
+  }, {
+  timezone: "Asia/Bangkok"
+});
 
   // แจ้งเตือนตอน 18:00 น. ทุกวัน (สำหรับคนที่ยังไม่ได้ออกกำลังกาย)
   cron.schedule("0 18 * * *", () => {
     console.log("Sending evening exercise reminders...");
     sendEveningReminder();
-  });
+  }, {
+  timezone: "Asia/Bangkok"
+});
 
   // แจ้งเตือนสรุปสัปดาห์ทุกวันอาทิตย์ตอน 20:00 น.
   cron.schedule("0 20 * * 0", () => {
     console.log("Sending weekly summary...");
     sendWeeklySummary();
-  });
+ }, {
+  timezone: "Asia/Bangkok"
+});
 
   console.log("Exercise notification schedules set up successfully");
 };

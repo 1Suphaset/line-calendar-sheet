@@ -13,6 +13,8 @@ import {
   testNotification 
 } from "../services/notification.service.js";
 
+import { getTodayString } from "../utils/dateTime.js";
+
 export const handleLineWebhook = async (req, res) => {
   try {
     const events = req.body.events;
@@ -108,7 +110,7 @@ const handleExerciseCommand = async (replyToken, userId) => {
             layout: "horizontal",
             contents: [
               { type: "text", text: `${idx + 1}. ${ex.name}`, size: "sm", wrap: true, flex: 6 },
-              { type: "button", style: "secondary", height: "sm", flex: 2, action: { type: "postback", label: "ทำแล้ว", data: `action=toggle_exercise&idx=${idx}`, displayText: `ทำแล้ว: ${ex.name}` } }
+              { type: "button", style: "secondary", height: "sm", flex: 2, action: { type: "postback", label: "✅", data: `action=toggle_exercise&idx=${idx}`, displayText: `ทำแล้ว: ${ex.name}` } }
             ],
             margin: "sm"
           }))
@@ -180,15 +182,31 @@ const handleExerciseCommand = async (replyToken, userId) => {
     await replyMessage(replyToken, "เกิดข้อผิดพลาดในการดึงข้อมูลการออกกำลังกาย");
   }
 };
-
 // จัดการคำสั่งยืนยัน
 const handleConfirmationCommand = async (replyToken, userId, confirmed) => {
   try {
+    // ตรวจสอบสถานะวันนี้
+    const status = getUserConfirmationStatus(userId);
+
+    if (status.hasConfirmed) {
+      await replyMessage(
+        replyToken, 
+        "✅ คุณได้บันทึกการออกกำลังกายสำหรับวันนี้แล้ว\n" +
+        `เวลา: ${status.timestamp}`
+      );
+      return;
+    }
+
+    // ถ้ายังไม่เคยยืนยัน -> ไปทำงานต่อ
     const result = await handleExerciseConfirmation(userId, confirmed);
-    
+
     if (result.success) {
       if (result.flex) {
-        await sendFlexMessage(replyToken, { type: 'flex', altText: 'สรุปสัปดาห์', contents: result.flex.contents });
+        await sendFlexMessage(replyToken, { 
+          type: 'flex', 
+          altText: 'สรุปสัปดาห์', 
+          contents: result.flex.contents 
+        });
       } else {
         await replyMessage(replyToken, result.message);
       }
@@ -200,6 +218,7 @@ const handleConfirmationCommand = async (replyToken, userId, confirmed) => {
     await replyMessage(replyToken, "เกิดข้อผิดพลาดในการยืนยัน");
   }
 };
+
 
 // จัดการคำสั่งสรุป
 const handleSummaryCommand = async (replyToken, userId) => {
@@ -250,7 +269,7 @@ const handleToggleExerciseCommand = async (replyToken, userId, rawIdx) => {
     }
 
     // อ่านแผนของวันนี้เพื่อทราบชื่อท่า
-    const today = new Date();
+    const today = getTodayString();
     const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayKey = dayKeys[today.getDay()];
     const planResult = await createExerciseNotification(userId, todayKey);
@@ -264,7 +283,7 @@ const handleToggleExerciseCommand = async (replyToken, userId, rawIdx) => {
     // บันทึก 1 แถวแบบ idempotent
     const row = [
       userId,
-      new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }),
+      getTodayString(),
       planResult.exerciseData.day,
       'Exercise Confirmed',
       `${idx + 1}. ${target.name}`,

@@ -1,7 +1,7 @@
 import { getTodayExercise, getExerciseByDay, formatExerciseMessage } from "../data/exerciseSchedule.js";
 import { insertEvent } from "./calendar.service.js";
 import { appendRow, appendRows, readRows, appendRowsIfNotExists, nowInBangkokString } from "./sheet.service.js";
-
+import { getTodayString } from "../utils/dateTime.js";
 // เก็บสถานะการยืนยันของผู้ใช้
 const userConfirmations = new Map();
 
@@ -12,7 +12,7 @@ const safeParseInt = (val) => {
 };
 
 const getTodayInfo = () => {
-  const today = new Date();
+  const today = getTodayString();
   const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
   const dayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   return {
@@ -51,7 +51,7 @@ export const createExerciseNotification = async (userId, dayKey = null) => {
 // สร้าง Event ใน Google Calendar สำหรับการออกกำลังกาย
 export const createExerciseCalendarEvent = async (userId, exerciseData) => {
   try {
-    const start = new Date();
+    const start = getTodayString();
     const end = new Date(start.getTime() + 30 * 60 * 1000); // +30 นาที
 
     const eventData = {
@@ -133,7 +133,7 @@ export const getUserConfirmationStatus = (userId) => {
 // สร้างข้อความสรุปการออกกำลังกายประจำสัปดาห์
 export const createWeeklySummary = async (userId) => {
   try {
-    const today = new Date();
+    const today = getTodayString();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay()); // เริ่มจากวันอาทิตย์
 
@@ -219,3 +219,4 @@ export const createWeeklySummary = async (userId) => {
     return { success: false, message: "เกิดข้อผิดพลาดในการสร้างสรุป" };
   }
 };
+
