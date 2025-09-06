@@ -460,47 +460,21 @@ const createExerciseFlexMessageByDay = (exerciseData, messageFallback) => {
   if (!exerciseData) return { type: "text", text: messageFallback };
 
   const exercises = Array.isArray(exerciseData.exercises) ? exerciseData.exercises : [];
+const checklistContents = exercises.map((ex, idx) => {
+  const contents = [
+    ...(ex.image ? [{ type: "image", url: ex.image, size: "sm", aspectMode: "cover", flex: 2 }] : []),
+    { type: "text", text: `${idx + 1}. ${ex.name ?? "-"}`, size: "sm", wrap: true, flex: 6 },
+    { type: "text", text: ex.sets ? `Sets: ${ex.sets}  Reps/Duration: ${ex.reps ?? ex.duration ?? "-"}` : "-", size: "sm", color: "#888888", wrap: true, margin: "xs" },
+    { type: "button", style: "secondary", height: "sm", flex: 2, action: { type: "postback", label: "✅", data: `action=toggle_exercise&idx=${idx}`, displayText: `ทำแล้ว: ${ex.name}` } }
+  ];
 
-  const checklistContents = exercises.map((ex, idx) => {
-    const contents = [];
-
-    // ใส่รูปภาพถ้ามี
-    if (ex.image) {
-      contents.push({
-        type: "image",
-        url: ex.image,
-        size: "sm",
-        aspectMode: "cover",
-        flex: 2
-      });
-    }
-
-    // ชื่อท่า
-    contents.push({
-      type: "text",
-      text: `${idx + 1}. ${ex.name ?? "-"}`,
-      size: "sm",
-      wrap: true,
-      flex: 6
-    });
-
-    // Sets/Reps/Duration
-    contents.push({
-      type: "text",
-      text: ex.sets ? `Sets: ${ex.sets}  Reps/Duration: ${ex.reps ?? ex.duration ?? "-"}` : "-",
-      size: "sm",
-      color: "#888888",
-      wrap: true,
-      flex: 4
-    });
-
-    return {
-      type: "box",
-      layout: "horizontal",
-      contents,
-      margin: "sm"
-    };
-  });
+  return {
+    type: "box",
+    layout: "horizontal",
+    contents: contents.filter(c => c && (c.type !== "text" || c.text)),
+    margin: "sm"
+  };
+});
 
   // ถ้าไม่มีท่าใด ๆ
   const bodyContents = exercises.length
