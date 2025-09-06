@@ -67,6 +67,7 @@ export const handleLineWebhook = async (req, res) => {
               { label: "ข้าม", text: "ข้าม" },
               { label: "สรุป", text: "สรุป" },
               { label: "เมนู", text: "เมนู" },
+              { label: "ตาราง", text: "ตาราง" },
             ]
           );
         }
