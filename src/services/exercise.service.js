@@ -1,7 +1,7 @@
 import { getTodayExercise, getExerciseByDay, formatExerciseMessage } from "../data/exerciseSchedule.js";
 import { insertEvent } from "./calendar.service.js";
 import { appendRow, appendRows, readRows, appendRowsIfNotExists, nowInBangkokString } from "./sheet.service.js";
-import { getTodayString,getTodayBangkok } from "../utils/dateTime.js";
+import { getTodayString, getTodayBangkok } from "../utils/dateTime.js";
 // เก็บสถานะการยืนยันของผู้ใช้
 const userConfirmations = new Map();
 
@@ -26,6 +26,9 @@ const getTodayInfo = () => {
 export const createExerciseNotification = async (userId, dayKey = null) => {
   try {
     const exerciseData = dayKey ? getExerciseByDay(dayKey) : getTodayExercise();
+    const exerciseNames = Array.isArray(exerciseData.exercises)
+      ? exerciseData.exercises.map(ex => ex.name).join('|')
+      : '';
 
     if (!exerciseData) {
       return { success: false, message: "ไม่พบข้อมูลการออกกำลังกายสำหรับวันนี้" };
@@ -38,8 +41,9 @@ export const createExerciseNotification = async (userId, dayKey = null) => {
       nowInBangkokString(),
       exerciseData.day,
       "Exercise Notification Sent",
-      exerciseData.exercises.map(ex => ex.name).join('|')
+      exerciseNames
     ]);
+
 
     return { success: true, message, exerciseData, userId };
   } catch (error) {
@@ -96,11 +100,11 @@ export const handleExerciseConfirmation = async (userId, confirmed) => {
       const todayPlan = getExerciseByDay(todayKey);
       const rows = Array.isArray(todayPlan?.exercises)
         ? todayPlan.exercises.map((ex, idx) => [
-            ...baseRow,
-            `${idx + 1}. ${ex.name}`,
-            ex.sets ?? '',
-            ex.reps ?? ex.duration ?? ''
-          ])
+          ...baseRow,
+          `${idx + 1}. ${ex.name}`,
+          ex.sets ?? '',
+          ex.reps ?? ex.duration ?? ''
+        ])
         : [[...baseRow, 'Rest Day', '', '']];
       await appendRowsIfNotExists(rows);
     } else {
