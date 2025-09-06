@@ -1,4 +1,4 @@
-import { getTodayString } from "../utils/dateTime";
+import { getTodayString } from "../utils/dateTime.js";
 // ตารางการออกกำลังกาย 7 วัน
 export const exerciseSchedule = {
   monday: {
