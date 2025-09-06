@@ -527,3 +527,33 @@ const handleDaySelection = async (replyToken, userMessage) => {
     await replyWithQuickReply(replyToken, "โปรดเลือกวัน:", quickReplyDayMenu);
   }
 };
+const quickReplyDayMenu = [
+  {
+    type: "action",
+    action: { type: "message", label: "วันจันทร์", text: "วันจันทร์" }
+  },
+  {
+    type: "action",
+    action: { type: "message", label: "วันอังคาร", text: "วันอังคาร" }
+  },
+  {
+    type: "action",
+    action: { type: "message", label: "วันพุธ", text: "วันพุธ" }
+  },
+  {
+    type: "action",
+    action: { type: "message", label: "วันพฤหัส", text: "วันพฤหัส" }
+  },
+  {
+    type: "action",
+    action: { type: "message", label: "วันศุกร์", text: "วันศุกร์" }
+  },
+  {
+    type: "action",
+    action: { type: "message", label: "วันเสาร์", text: "วันเสาร์" }
+  },
+  {
+    type: "action",
+    action: { type: "message", label: "วันอาทิตย์", text: "วันอาทิตย์" }
+  },
+];
