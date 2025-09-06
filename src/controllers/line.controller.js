@@ -452,77 +452,78 @@ const handleTestCommand = async (replyToken, userId) => {
     await replyMessage(replyToken, "เกิดข้อผิดพลาดในการทดสอบ");
   }
 
-  // ฟังก์ชันสำหรับสร้าง Flex Message ของแต่ละวัน
-  const createExerciseFlexMessageByDay = (exerciseData, messageFallback) => {
-    if (!exerciseData) return { type: "text", text: messageFallback };
 
-    const exercises = Array.isArray(exerciseData.exercises) ? exerciseData.exercises : [];
-    const checklistContents = exercises.length
-      ? exercises.map((ex, idx) => ({
+};
+
+// ฟังก์ชันสำหรับสร้าง Flex Message ของแต่ละวัน
+const createExerciseFlexMessageByDay = (exerciseData, messageFallback) => {
+  if (!exerciseData) return { type: "text", text: messageFallback };
+
+  const exercises = Array.isArray(exerciseData.exercises) ? exerciseData.exercises : [];
+  const checklistContents = exercises.length
+    ? exercises.map((ex, idx) => ({
+      type: "box",
+      layout: "horizontal",
+      contents: [
+        ex.image ? { type: "image", url: ex.image, size: "sm", aspectMode: "cover", flex: 2 } : {},
+        { type: "text", text: `${idx + 1}. ${ex.name}`, size: "sm", wrap: true, flex: 6 },
+        { type: "text", text: ex.sets ? `Sets: ${ex.sets}  Reps: ${ex.reps ?? ex.duration ?? "-"}` : "", size: "sm", color: "#888888", wrap: true, flex: 4 }
+      ],
+      margin: "sm"
+    }))
+    : [{ type: "text", text: messageFallback, wrap: true, size: "sm" }];
+
+  return {
+    type: "flex",
+    altText: `ตารางออกกำลังกายวัน${exerciseData.day}`,
+    contents: {
+      type: "bubble",
+      header: { type: "box", layout: "vertical", contents: [{ type: "text", text: `🏋️‍♀️ ตารางออกกำลังกายวัน${exerciseData.day}`, weight: "bold", size: "lg", color: "#1DB446" }] },
+      body: {
         type: "box",
-        layout: "horizontal",
+        layout: "vertical",
         contents: [
-          ex.image ? { type: "image", url: ex.image, size: "sm", aspectMode: "cover", flex: 2 } : {},
-          { type: "text", text: `${idx + 1}. ${ex.name}`, size: "sm", wrap: true, flex: 6 },
-          { type: "text", text: ex.sets ? `Sets: ${ex.sets}  Reps: ${ex.reps ?? ex.duration ?? "-"}` : "", size: "sm", color: "#888888", wrap: true, flex: 4 }
-        ],
-        margin: "sm"
-      }))
-      : [{ type: "text", text: messageFallback, wrap: true, size: "sm" }];
-
-    return {
-      type: "flex",
-      altText: `ตารางออกกำลังกายวัน${exerciseData.day}`,
-      contents: {
-        type: "bubble",
-        header: { type: "box", layout: "vertical", contents: [{ type: "text", text: `🏋️‍♀️ ตารางออกกำลังกายวัน${exerciseData.day}`, weight: "bold", size: "lg", color: "#1DB446" }] },
-        body: {
-          type: "box",
-          layout: "vertical",
-          contents: [
-            { type: "text", text: exerciseData.focus ? `🎯 โฟกัส: ${exerciseData.focus}` : "", size: "sm", wrap: true, margin: "xs" },
-            exercises.length ? { type: "text", text: "เช็กลิสต์รายท่า:", weight: "bold", margin: "md", size: "sm" } : {},
-            ...checklistContents,
-            exerciseData.rest ? { type: "text", text: `⏱️ พัก: ${exerciseData.rest}`, size: "sm", color: "#888888", wrap: true, margin: "md" } : {}
-          ]
-        }
+          { type: "text", text: exerciseData.focus ? `🎯 โฟกัส: ${exerciseData.focus}` : "", size: "sm", wrap: true, margin: "xs" },
+          exercises.length ? { type: "text", text: "เช็กลิสต์รายท่า:", weight: "bold", margin: "md", size: "sm" } : {},
+          ...checklistContents,
+          exerciseData.rest ? { type: "text", text: `⏱️ พัก: ${exerciseData.rest}`, size: "sm", color: "#888888", wrap: true, margin: "md" } : {}
+        ]
       }
-    };
-  };// ฟังก์ชัน handle สำหรับดูตารางแต่ละวัน
-  const handleExerciseByDayCommand = async (replyToken, dayKey) => {
-    try {
-      const exerciseData = exerciseSchedule[dayKey];
-      if (!exerciseData) {
-        await replyMessage(replyToken, "❌ ไม่พบตารางสำหรับวันนั้น");
-        return;
-      }
-
-      const flexMessage = createExerciseFlexMessageByDay(exerciseData, "❌ ไม่พบตารางออกกำลังกาย");
-      await sendFlexMessage(replyToken, flexMessage);
-    } catch (error) {
-      console.error("Error in handleExerciseByDayCommand:", error);
-      await replyMessage(replyToken, "เกิดข้อผิดพลาดในการดึงตารางออกกำลังกาย");
     }
   };
-
-  // ฟังก์ชัน handleDaySelection (เรียกจาก webhook)
-  const handleDaySelection = async (replyToken, userMessage) => {
-    const dayMap = {
-      "วันจันทร์": "monday",
-      "วันอังคาร": "tuesday",
-      "วันพุธ": "wednesday",
-      "วันพฤหัส": "thursday",
-      "วันศุกร์": "friday",
-      "วันเสาร์": "saturday",
-      "วันอาทิตย์": "sunday",
-    };
-    const dayKey = dayMap[userMessage];
-    if (dayKey) {
-      await handleExerciseByDayCommand(replyToken, dayKey);
-    } else {
-      // ส่ง Quick Reply ให้เลือกวัน
-      await replyWithQuickReply(replyToken, "โปรดเลือกวัน:", quickReplyDayMenu);
+};// ฟังก์ชัน handle สำหรับดูตารางแต่ละวัน
+const handleExerciseByDayCommand = async (replyToken, dayKey) => {
+  try {
+    const exerciseData = exerciseSchedule[dayKey];
+    if (!exerciseData) {
+      await replyMessage(replyToken, "❌ ไม่พบตารางสำหรับวันนั้น");
+      return;
     }
-  };
 
+    const flexMessage = createExerciseFlexMessageByDay(exerciseData, "❌ ไม่พบตารางออกกำลังกาย");
+    await sendFlexMessage(replyToken, flexMessage);
+  } catch (error) {
+    console.error("Error in handleExerciseByDayCommand:", error);
+    await replyMessage(replyToken, "เกิดข้อผิดพลาดในการดึงตารางออกกำลังกาย");
+  }
+};
+
+// ฟังก์ชัน handleDaySelection (เรียกจาก webhook)
+const handleDaySelection = async (replyToken, userMessage) => {
+  const dayMap = {
+    "วันจันทร์": "monday",
+    "วันอังคาร": "tuesday",
+    "วันพุธ": "wednesday",
+    "วันพฤหัส": "thursday",
+    "วันศุกร์": "friday",
+    "วันเสาร์": "saturday",
+    "วันอาทิตย์": "sunday",
+  };
+  const dayKey = dayMap[userMessage];
+  if (dayKey) {
+    await handleExerciseByDayCommand(replyToken, dayKey);
+  } else {
+    // ส่ง Quick Reply ให้เลือกวัน
+    await replyWithQuickReply(replyToken, "โปรดเลือกวัน:", quickReplyDayMenu);
+  }
 };
